@@ -11,7 +11,11 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -51,16 +55,30 @@ fun AppNavigation() {
     val planVm: PlanViewModel = viewModel()
     val weekVm: WeekViewModel = viewModel()
 
+    // Survive process death: save which tab index is selected.
+    var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
+
+    // Restore tab on process recreation.
+    LaunchedEffect(Unit) {
+        if (selectedIndex != 0) {
+            navController.navigate(TOP_LEVEL_ROUTES[selectedIndex].route) {
+                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                launchSingleTop = true
+            }
+        }
+    }
+
     Scaffold(
         bottomBar = {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentDest = navBackStackEntry?.destination
 
             NavigationBar {
-                TOP_LEVEL_ROUTES.forEach { route ->
+                TOP_LEVEL_ROUTES.forEachIndexed { index, route ->
                     NavigationBarItem(
                         selected = currentDest?.hasRoute(route.route::class) == true,
                         onClick = {
+                            selectedIndex = index
                             navController.navigate(route.route) {
                                 popUpTo(navController.graph.startDestinationId) { saveState = true }
                                 launchSingleTop = true
