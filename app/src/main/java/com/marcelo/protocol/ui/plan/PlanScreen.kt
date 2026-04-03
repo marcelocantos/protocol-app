@@ -83,7 +83,7 @@ fun PlanScreen(vm: PlanViewModel) {
                 onSetType = { vm.setPlannedType(row.day, it) },
                 onSetParking = { vm.setParkingStatus(row.day, it) },
                 onOpenWilson = {
-                    val wilsonPackage = "com.wilsonparking.app"
+                    val wilsonPackage = "au.com.wilsonone"
                     val intent = context.packageManager
                         .getLaunchIntentForPackage(wilsonPackage)
                     if (intent != null) {
