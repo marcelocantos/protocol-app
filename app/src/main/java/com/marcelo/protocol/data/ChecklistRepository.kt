@@ -32,17 +32,4 @@ class ChecklistRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    suspend fun pruneOldEntries() {
-        val cutoff = LocalDate.now().minusDays(14)
-        dataStore.edit { prefs ->
-            val toRemove = prefs.asMap().keys.filter { key ->
-                val name = key.name
-                if (name.startsWith("checklist_")) {
-                    val dateStr = name.removePrefix("checklist_")
-                    runCatching { LocalDate.parse(dateStr) < cutoff }.getOrDefault(false)
-                } else false
-            }
-            toRemove.forEach { prefs.remove(it) }
-        }
-    }
 }

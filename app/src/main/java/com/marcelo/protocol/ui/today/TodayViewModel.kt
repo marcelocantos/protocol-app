@@ -97,7 +97,4 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    init {
-        viewModelScope.launch { checklistRepo.pruneOldEntries() }
-    }
 }
