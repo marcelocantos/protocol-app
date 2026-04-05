@@ -12,14 +12,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
@@ -33,7 +33,6 @@ import com.marcelo.protocol.ui.today.TodayScreen
 import com.marcelo.protocol.ui.today.TodayViewModel
 import com.marcelo.protocol.ui.week.WeekScreen
 import com.marcelo.protocol.ui.week.WeekViewModel
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
@@ -53,7 +52,7 @@ val TOP_LEVEL_ROUTES = listOf(
     TopLevelRoute("Week", WeekRoute, Icons.Default.DateRange),
 )
 
-private val SELECTED_TAB_KEY = intPreferencesKey("selected_tab")
+private const val SELECTED_TAB_KEY = "selected_tab"
 
 @Composable
 fun AppNavigation() {
@@ -64,14 +63,14 @@ fun AppNavigation() {
 
     val app = LocalContext.current.applicationContext as ProtocolApp
     val scope = rememberCoroutineScope()
-    val savedIndex by app.dataStore.data
-        .map { it[SELECTED_TAB_KEY] ?: 0 }
-        .collectAsState(initial = 0)
+    var savedIndex by remember { mutableIntStateOf(0) }
 
-    // Restore tab on launch.
-    LaunchedEffect(savedIndex) {
-        if (savedIndex != 0) {
-            navController.navigate(TOP_LEVEL_ROUTES[savedIndex].route) {
+    // Load saved tab on launch.
+    LaunchedEffect(Unit) {
+        val stored = app.db.getSetting(SELECTED_TAB_KEY)?.toIntOrNull() ?: 0
+        savedIndex = stored
+        if (stored != 0) {
+            navController.navigate(TOP_LEVEL_ROUTES[stored].route) {
                 popUpTo(navController.graph.startDestinationId) { saveState = true }
                 launchSingleTop = true
             }
@@ -89,8 +88,9 @@ fun AppNavigation() {
                         selected = currentDest?.hasRoute(route.route::class) == true,
                         onClick = {
                             scope.launch {
-                                app.dataStore.edit { it[SELECTED_TAB_KEY] = index }
+                                app.db.setSetting(SELECTED_TAB_KEY, index.toString())
                             }
+                            savedIndex = index
                             navController.navigate(route.route) {
                                 popUpTo(navController.graph.startDestinationId) { saveState = true }
                                 launchSingleTop = true

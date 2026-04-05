@@ -26,7 +26,7 @@ class WeekViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as ProtocolApp
     private val db: ProtocolDatabase = app.db
-    private val scheduleRepo = ScheduleRepository(app.dataStore)
+    private val scheduleRepo = ScheduleRepository(app.db)
 
     val schedule: StateFlow<Map<DayOfWeek, DayType>> = scheduleRepo.schedule
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
@@ -43,19 +43,11 @@ class WeekViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            // Load gym count.
             _gymCount.value = db.gymCountForWeek(LocalDate.now())
 
-            // Load week summary.
             val today = LocalDate.now()
             val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
-            val summaries = days.map { date ->
-                val type = DayType.REST // Will be overwritten below.
-                val completed = db.completedItems(date)
-                DaySummary(date, type, 0f) to completed
-            }
 
-            // Combine with schedule flow.
             scheduleRepo.schedule.collect { sched ->
                 _weekSummary.value = days.map { date ->
                     val type = sched[date.dayOfWeek] ?: DayType.REST

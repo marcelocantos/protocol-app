@@ -26,7 +26,6 @@ data class PlanDayRow(
     val defaultType: DayType,
     val plan: OfficeDayPlan,
 ) {
-    /** Effective day type: plan override, or schedule default. */
     val effectiveType: DayType get() = plan.dayType ?: defaultType
     val isDecided: Boolean get() = plan.dayType != null
 }
@@ -35,8 +34,8 @@ data class PlanDayRow(
 class PlanViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as ProtocolApp
-    private val scheduleRepo = ScheduleRepository(app.dataStore)
-    private val planningRepo = PlanningRepository(app.dataStore)
+    private val scheduleRepo = ScheduleRepository(app.db)
+    private val planningRepo = PlanningRepository(app.db)
 
     private val _weekStart = MutableStateFlow(planningRepo.weekStartFor(LocalDate.now().plusWeeks(1)))
     val weekStart: StateFlow<LocalDate> = _weekStart
@@ -63,13 +62,11 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
         _weekStart.value = planningRepo.weekStartFor(LocalDate.now().plusWeeks(1))
     }
 
-    /** Set planned day type. Null = undecided (❓). */
     fun setPlannedType(day: DayOfWeek, type: DayType?) {
         viewModelScope.launch {
             val ws = _weekStart.value
             val current = days.value.find { it.day == day }?.plan ?: OfficeDayPlan()
             val newPlan = if (type == null) {
-                // Undecided — clear parking too.
                 current.copy(dayType = null, parkingStatus = ParkingStatus.UNPLANNED)
             } else {
                 current.copy(dayType = type)

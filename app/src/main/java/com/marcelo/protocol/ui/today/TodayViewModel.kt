@@ -35,7 +35,7 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as ProtocolApp
     private val db: ProtocolDatabase = app.db
-    private val scheduleRepo = ScheduleRepository(app.dataStore)
+    private val scheduleRepo = ScheduleRepository(app.db)
 
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()

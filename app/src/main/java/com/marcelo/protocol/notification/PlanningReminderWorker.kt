@@ -6,11 +6,9 @@ import androidx.work.WorkerParameters
 import com.marcelo.protocol.ProtocolApp
 import com.marcelo.protocol.data.PlanningRepository
 import com.marcelo.protocol.data.ScheduleRepository
-import com.marcelo.protocol.model.DayType
 import kotlinx.coroutines.flow.first
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.temporal.TemporalAdjusters
 
 class PlanningReminderWorker(
@@ -20,8 +18,8 @@ class PlanningReminderWorker(
 
     override suspend fun doWork(): Result {
         val app = applicationContext as ProtocolApp
-        val planningRepo = PlanningRepository(app.dataStore)
-        val scheduleRepo = ScheduleRepository(app.dataStore)
+        val planningRepo = PlanningRepository(app.db)
+        val scheduleRepo = ScheduleRepository(app.db)
 
         val today = LocalDate.now()
         val nextMonday = today.with(TemporalAdjusters.next(DayOfWeek.MONDAY))
@@ -44,7 +42,6 @@ class PlanningReminderWorker(
             )
         }
 
-        // Re-schedule for the next reminder.
         NotificationScheduler.schedulePlanningReminders(applicationContext)
 
         return Result.success()
