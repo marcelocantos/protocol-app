@@ -240,7 +240,7 @@ private fun ChecklistCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (row.completedAt != null) {
+                if (row.completedAt != null && row.completedAt != LocalTime.MIDNIGHT) {
                     Text(
                         text = row.completedAt.format(TIME_FORMAT),
                         style = MaterialTheme.typography.bodySmall,
