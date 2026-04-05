@@ -1,8 +1,8 @@
 package com.marcelo.protocol.ui.today
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,14 +21,22 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +44,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 /** Number of pages in each direction from today. */
@@ -45,10 +54,11 @@ private const val TOTAL_PAGES = PAGE_OFFSET * 2 + 1
 private fun pageToDate(page: Int): LocalDate =
     LocalDate.now().plusDays((page - PAGE_OFFSET).toLong())
 
+private val TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
+
 @Composable
 fun TodayScreen(vm: TodayViewModel) {
     val selectedDate by vm.selectedDate.collectAsStateWithLifecycle()
-    val isToday by vm.isToday.collectAsStateWithLifecycle()
     val editable by vm.editable.collectAsStateWithLifecycle()
     val unlocked by vm.unlocked.collectAsStateWithLifecycle()
 
@@ -91,7 +101,6 @@ private fun DayPage(
     val gymCount by vm.gymCount.collectAsStateWithLifecycle()
     val selectedDate by vm.selectedDate.collectAsStateWithLifecycle()
 
-    // Only render the active page's real data; off-screen pages show the date header.
     val isActivePage = date == selectedDate
 
     val done = if (isActivePage) checklist.count { it.checked } else 0
@@ -174,6 +183,7 @@ private fun DayPage(
                 ChecklistCard(
                     row = row,
                     onToggle = { vm.toggle(row.item.id) },
+                    onTimeChange = { vm.updateCompletionTime(row.item.id, it) },
                     enabled = editable,
                 )
             }
@@ -183,8 +193,16 @@ private fun DayPage(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChecklistCard(row: ChecklistRow, onToggle: () -> Unit, enabled: Boolean) {
+private fun ChecklistCard(
+    row: ChecklistRow,
+    onToggle: () -> Unit,
+    onTimeChange: (LocalTime) -> Unit,
+    enabled: Boolean,
+) {
+    var showTimePicker by remember { mutableStateOf(false) }
+
     val bg by animateColorAsState(
         targetValue = if (row.checked)
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
@@ -216,11 +234,46 @@ private fun ChecklistCard(row: ChecklistRow, onToggle: () -> Unit, enabled: Bool
                     textDecoration = if (row.checked) TextDecoration.LineThrough else null,
                 )
             }
-            Text(
-                text = row.item.timeHint,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = row.item.timeHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (row.completedAt != null) {
+                    Text(
+                        text = row.completedAt.format(TIME_FORMAT),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = if (enabled) {
+                            Modifier.clickable { showTimePicker = true }
+                        } else {
+                            Modifier
+                        },
+                    )
+                }
+            }
         }
+    }
+
+    if (showTimePicker && row.completedAt != null) {
+        val timeState = rememberTimePickerState(
+            initialHour = row.completedAt.hour,
+            initialMinute = row.completedAt.minute,
+            is24Hour = true,
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    onTimeChange(LocalTime.of(timeState.hour, timeState.minute))
+                    showTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
+            },
+            text = { TimePicker(state = timeState) },
+        )
     }
 }

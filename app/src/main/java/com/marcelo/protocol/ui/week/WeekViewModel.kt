@@ -4,13 +4,13 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.marcelo.protocol.ProtocolApp
-import com.marcelo.protocol.data.ChecklistRepository
+import com.marcelo.protocol.data.ProtocolDatabase
 import com.marcelo.protocol.data.ScheduleRepository
 import com.marcelo.protocol.model.DayType
 import com.marcelo.protocol.model.checklistFor
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
@@ -25,33 +25,46 @@ data class DaySummary(
 class WeekViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as ProtocolApp
+    private val db: ProtocolDatabase = app.db
     private val scheduleRepo = ScheduleRepository(app.dataStore)
-    private val checklistRepo = ChecklistRepository(app.dataStore)
 
     val schedule: StateFlow<Map<DayOfWeek, DayType>> = scheduleRepo.schedule
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    val gymCount: StateFlow<Int> = checklistRepo.gymCount(LocalDate.now())
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    private val _gymCount = MutableStateFlow(0)
+    val gymCount: StateFlow<Int> = _gymCount
 
-    val weekSummary: StateFlow<List<DaySummary>> = run {
-        val today = LocalDate.now()
-        val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
-        val flows = days.map { date ->
-            combine(
-                scheduleRepo.dayTypeFor(date),
-                checklistRepo.completedItems(date),
-            ) { type, completed ->
-                val total = checklistFor(type).size
-                val done = checklistFor(type).count { it.id in completed }
-                DaySummary(date, type, if (total > 0) done.toFloat() / total else 0f)
-            }
-        }
-        combine(flows) { it.toList() }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    }
+    private val _weekSummary = MutableStateFlow<List<DaySummary>>(emptyList())
+    val weekSummary: StateFlow<List<DaySummary>> = _weekSummary
 
     fun setDayType(day: DayOfWeek, type: DayType) {
         viewModelScope.launch { scheduleRepo.setDayType(day, type) }
+    }
+
+    init {
+        viewModelScope.launch {
+            // Load gym count.
+            _gymCount.value = db.gymCountForWeek(LocalDate.now())
+
+            // Load week summary.
+            val today = LocalDate.now()
+            val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
+            val summaries = days.map { date ->
+                val type = DayType.REST // Will be overwritten below.
+                val completed = db.completedItems(date)
+                DaySummary(date, type, 0f) to completed
+            }
+
+            // Combine with schedule flow.
+            scheduleRepo.schedule.collect { sched ->
+                _weekSummary.value = days.map { date ->
+                    val type = sched[date.dayOfWeek] ?: DayType.REST
+                    val completed = db.completedItems(date)
+                    val total = checklistFor(type).size
+                    val done = checklistFor(type).count { it.id in completed }
+                    DaySummary(date, type, if (total > 0) done.toFloat() / total else 0f)
+                }
+            }
+        }
     }
 }

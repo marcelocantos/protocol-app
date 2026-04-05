@@ -13,6 +13,10 @@ object PrefsKeys {
     fun checklistKey(date: LocalDate) =
         stringSetPreferencesKey("checklist_$date")
 
+    /** New key: stores JSON map of itemId -> "HH:mm" completion times. */
+    fun checklistTimesKey(date: LocalDate) =
+        stringPreferencesKey("checklist_times_$date")
+
     fun gymCountKey(date: LocalDate) =
         intPreferencesKey("gym_${isoWeekId(date)}")
 
