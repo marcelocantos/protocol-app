@@ -22,12 +22,13 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 
 data class ChecklistRow(
     val item: ChecklistItem,
     val checked: Boolean,
-    val completedAt: LocalTime? = null,
+    val completedAt: LocalDateTime? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -40,7 +41,6 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
 
-    /** Emitted to trigger a re-read from the database. */
     private val _refresh = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     private val _unlocked = MutableStateFlow(false)
@@ -58,7 +58,6 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
         .flatMapLatest { scheduleRepo.dayTypeFor(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DayType.REST)
 
-    /** Re-query completions from DB whenever the date changes or a write happens. */
     private val completions = merge(_selectedDate, _refresh)
         .map { db.completedItems(_selectedDate.value) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
@@ -97,7 +96,7 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
             if (isCompleted) {
                 db.removeCompletion(date, itemId)
             } else {
-                db.setCompletion(date, itemId, LocalTime.now())
+                db.setCompletion(date, itemId, LocalDateTime.now())
             }
             _refresh.emit(Unit)
         }
@@ -106,7 +105,7 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
     fun updateCompletionTime(itemId: String, time: LocalTime) {
         viewModelScope.launch {
             val date = _selectedDate.value
-            db.setCompletion(date, itemId, time)
+            db.setCompletion(date, itemId, date.atTime(time))
             _refresh.emit(Unit)
         }
     }

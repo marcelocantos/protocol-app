@@ -11,10 +11,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.LocalTime
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 
-class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.db", null, 1) {
+private val RFC3339_MS: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS")
+
+class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""
@@ -48,30 +51,39 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
         """)
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            // v1 stored completed_at as "HH:mm". Convert to RFC 3339 using the date column.
+            db.execSQL("""
+                UPDATE checklist_completions
+                SET completed_at = date || 'T' || completed_at || ':00.000'
+                WHERE length(completed_at) <= 5
+            """)
+        }
+    }
 
     // -- Checklist --
 
-    suspend fun completedItems(date: LocalDate): Map<String, LocalTime> = withContext(Dispatchers.IO) {
-        val result = mutableMapOf<String, LocalTime>()
+    suspend fun completedItems(date: LocalDate): Map<String, LocalDateTime> = withContext(Dispatchers.IO) {
+        val result = mutableMapOf<String, LocalDateTime>()
         readableDatabase.rawQuery(
             "SELECT item_id, completed_at FROM checklist_completions WHERE date = ?",
             arrayOf(date.toString()),
         ).use { cursor ->
             while (cursor.moveToNext()) {
-                result[cursor.getString(0)] = LocalTime.parse(cursor.getString(1))
+                result[cursor.getString(0)] = LocalDateTime.parse(cursor.getString(1), RFC3339_MS)
             }
         }
         result
     }
 
-    suspend fun setCompletion(date: LocalDate, itemId: String, time: LocalTime) = withContext(Dispatchers.IO) {
+    suspend fun setCompletion(date: LocalDate, itemId: String, timestamp: LocalDateTime) = withContext(Dispatchers.IO) {
         writableDatabase.insertWithOnConflict(
             "checklist_completions", null,
             ContentValues().apply {
                 put("date", date.toString())
                 put("item_id", itemId)
-                put("completed_at", time.withSecond(0).withNano(0).toString())
+                put("completed_at", timestamp.format(RFC3339_MS))
             },
             SQLiteDatabase.CONFLICT_REPLACE,
         )

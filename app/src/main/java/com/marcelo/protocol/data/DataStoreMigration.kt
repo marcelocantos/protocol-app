@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.LocalTime
+import java.time.LocalDateTime
 
 /**
  * One-time migration from DataStore to SQLite.
@@ -28,8 +28,7 @@ object DataStoreMigration {
 
         // Migrate checklist completions.
         // Keys are "checklist_YYYY-MM-DD" -> Set<String> of item IDs.
-        // We don't have actual times, so default to 00:00.
-        val defaultTime = LocalTime.MIDNIGHT
+        // Old store didn't record times; use midnight on that date.
         prefs.asMap().forEach { (key, value) ->
             val name = key.name
             if (name.startsWith("checklist_") && value is Set<*>) {
@@ -38,7 +37,7 @@ object DataStoreMigration {
                 @Suppress("UNCHECKED_CAST")
                 val items = value as Set<String>
                 items.forEach { itemId ->
-                    db.setCompletion(date, itemId, defaultTime)
+                    db.setCompletion(date, itemId, date.atStartOfDay())
                 }
             }
         }

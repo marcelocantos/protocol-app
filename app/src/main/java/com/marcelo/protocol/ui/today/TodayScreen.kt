@@ -44,8 +44,12 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+
+/** Timestamps before this date with midnight time are legacy (no real time recorded). */
+private val TIMESTAMP_CUTOFF = LocalDate.of(2026, 4, 6)
 
 /** Number of pages in each direction from today. */
 private const val PAGE_OFFSET = 365
@@ -240,26 +244,31 @@ private fun ChecklistCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (row.completedAt != null && row.completedAt != LocalTime.MIDNIGHT) {
-                    Text(
-                        text = row.completedAt.format(TIME_FORMAT),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = if (enabled) {
-                            Modifier.clickable { showTimePicker = true }
-                        } else {
-                            Modifier
-                        },
-                    )
+                if (row.completedAt != null) {
+                    val isLegacy = row.completedAt.toLocalDate() < TIMESTAMP_CUTOFF
+                        && row.completedAt.toLocalTime() == LocalTime.MIDNIGHT
+                    if (!isLegacy) {
+                        Text(
+                            text = row.completedAt.toLocalTime().format(TIME_FORMAT),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = if (enabled) {
+                                Modifier.clickable { showTimePicker = true }
+                            } else {
+                                Modifier
+                            },
+                        )
+                    }
                 }
             }
         }
     }
 
     if (showTimePicker && row.completedAt != null) {
+        val time = row.completedAt.toLocalTime()
         val timeState = rememberTimePickerState(
-            initialHour = row.completedAt.hour,
-            initialMinute = row.completedAt.minute,
+            initialHour = time.hour,
+            initialMinute = time.minute,
             is24Hour = true,
         )
         AlertDialog(
