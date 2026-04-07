@@ -1,3 +1,6 @@
+// Copyright 2026 Marcelo Cantos
+// SPDX-License-Identifier: Apache-2.0
+
 package com.marcelo.protocol.data
 
 import android.content.ContentValues
@@ -95,6 +98,24 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
             "date = ? AND item_id = ?",
             arrayOf(date.toString(), itemId),
         )
+    }
+
+    suspend fun completedItemsBatch(dates: List<LocalDate>): Map<LocalDate, Map<String, LocalDateTime>> = withContext(Dispatchers.IO) {
+        if (dates.isEmpty()) return@withContext emptyMap()
+        val placeholders = dates.joinToString(",") { "?" }
+        val args = dates.map { it.toString() }.toTypedArray()
+        val result = mutableMapOf<LocalDate, MutableMap<String, LocalDateTime>>()
+        readableDatabase.rawQuery(
+            "SELECT date, item_id, completed_at FROM checklist_completions WHERE date IN ($placeholders)",
+            args,
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                val date = LocalDate.parse(cursor.getString(0))
+                val map = result.getOrPut(date) { mutableMapOf() }
+                map[cursor.getString(1)] = LocalDateTime.parse(cursor.getString(2), RFC3339_MS)
+            }
+        }
+        result
     }
 
     suspend fun gymCountForWeek(date: LocalDate): Int = withContext(Dispatchers.IO) {

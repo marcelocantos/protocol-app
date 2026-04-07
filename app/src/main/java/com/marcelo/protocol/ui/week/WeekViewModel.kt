@@ -1,3 +1,6 @@
+// Copyright 2026 Marcelo Cantos
+// SPDX-License-Identifier: Apache-2.0
+
 package com.marcelo.protocol.ui.week
 
 import android.app.Application
@@ -45,13 +48,13 @@ class WeekViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _gymCount.value = db.gymCountForWeek(LocalDate.now())
 
-            val today = LocalDate.now()
-            val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
-
             scheduleRepo.schedule.collect { sched ->
+                val today = LocalDate.now()
+                val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
+                val allCompletions = db.completedItemsBatch(days)
                 _weekSummary.value = days.map { date ->
                     val type = sched[date.dayOfWeek] ?: DayType.REST
-                    val completed = db.completedItems(date)
+                    val completed = allCompletions[date] ?: emptyMap()
                     val total = checklistFor(type).size
                     val done = checklistFor(type).count { it.id in completed }
                     DaySummary(date, type, if (total > 0) done.toFloat() / total else 0f)

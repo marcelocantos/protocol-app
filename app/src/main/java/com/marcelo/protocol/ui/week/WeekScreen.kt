@@ -1,3 +1,6 @@
+// Copyright 2026 Marcelo Cantos
+// SPDX-License-Identifier: Apache-2.0
+
 package com.marcelo.protocol.ui.week
 
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.marcelo.protocol.model.DayType
+import com.marcelo.protocol.model.GYM_WEEKLY_TARGET
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 import java.util.Locale
@@ -94,13 +98,13 @@ fun WeekScreen(vm: WeekViewModel) {
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
-                            "$gymCount / 3 sessions",
+                            "$gymCount / $GYM_WEEKLY_TARGET sessions",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                         )
                     }
                     CircularProgressIndicator(
-                        progress = { (gymCount / 3f).coerceAtMost(1f) },
+                        progress = { (gymCount.toFloat() / GYM_WEEKLY_TARGET).coerceAtMost(1f) },
                         modifier = Modifier.size(56.dp),
                         strokeWidth = 6.dp,
                     )

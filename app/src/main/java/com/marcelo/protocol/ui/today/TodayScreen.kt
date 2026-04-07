@@ -1,3 +1,6 @@
+// Copyright 2026 Marcelo Cantos
+// SPDX-License-Identifier: Apache-2.0
+
 package com.marcelo.protocol.ui.today
 
 import androidx.compose.animation.animateColorAsState
@@ -46,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import com.marcelo.protocol.model.GYM_WEEKLY_TARGET
 import java.time.format.DateTimeFormatter
 
 /** Timestamps before this date with midnight time are legacy (no real time recorded). */
@@ -168,7 +172,7 @@ private fun DayPage(
                     ) {
                         Text("$done / $total complete", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "\uD83C\uDFCB\uFE0F Gym this week: $gymCount / 3",
+                            "\uD83C\uDFCB\uFE0F Gym this week: $gymCount / $GYM_WEEKLY_TARGET",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }

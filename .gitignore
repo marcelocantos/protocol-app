@@ -8,3 +8,7 @@ local.properties
 *.aab
 .DS_Store
 .java-version
+*.hprof
+.cxx/
+*.jks
+*.keystore
