@@ -20,3 +20,11 @@ maintenance activities. Append-only -- newest entries at the bottom.
   - Missing ProGuard rules for kotlinx-serialization (medium)
   - WeekViewModel stale date list (medium)
   - Backup/export strategy for SQLite (medium)
+
+## 2026-04-08 -- /docs
+
+- **Commit**: (this commit)
+- **Outcome**: Created CLAUDE.md (project overview, build, architecture, data layer, notifications, DB schema, conventions) and README.md (features, build, licence). Fixed lint-failing backup_rules.xml.
+- **Deferred**:
+  - agents-guide.md (project too small to justify separate file)
+  - Testing strategy docs (no tests exist yet)
