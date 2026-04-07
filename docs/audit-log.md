@@ -3,28 +3,12 @@
 Chronological record of audits, releases, documentation passes, and other
 maintenance activities. Append-only -- newest entries at the bottom.
 
-## 2026-04-08 -- /audit
+## 2026-04-08 -- /open-source protocol-app
 
-- **Commit**: `b63ff31`
-- **Outcome**: 26 findings (2 critical, 5 high, 6 medium, 4 low, 9 info). Report: docs/audit-2026-04-08.md.
+- **Commits**: `a70cd1e`..`89e52c2`
+- **Outcome**: Open-sourced protocol-app. Audit: 26 findings (2 critical, 5 high, 6 medium, 4 low, 9 info), all critical/high addressed. Added Apache 2.0 LICENSE + SPDX headers to all .kt files. Added CI (GitHub Actions: build + lint). Removed dead code (ChecklistRepository, DataStoreMigration, PrefsKeys) and purged DataStore dependency. Added ProGuard rules, batch DB query, GYM_WEEKLY_TARGET constant. Docs: CLAUDE.md (architecture, build, data layer, notifications, DB schema), README.md. Fixed lint-failing backup_rules.xml. Added repo topics. Release skipped (personal Android app, no binary distribution).
 - **Deferred**:
-  - No licence file (critical)
-  - No copyright/SPDX headers (critical)
-  - local.properties committed to VCS (high)
   - Zero test coverage (high)
-  - No CI pipeline (high)
-  - Race condition in migration startup (high)
-  - Dead code: ChecklistRepository (high)
-  - No README (medium)
-  - No CLAUDE.md (medium)
-  - Missing ProGuard rules for kotlinx-serialization (medium)
-  - WeekViewModel stale date list (medium)
-  - Backup/export strategy for SQLite (medium)
-
-## 2026-04-08 -- /docs
-
-- **Commit**: (this commit)
-- **Outcome**: Created CLAUDE.md (project overview, build, architecture, data layer, notifications, DB schema, conventions) and README.md (features, build, licence). Fixed lint-failing backup_rules.xml.
-- **Deferred**:
-  - agents-guide.md (project too small to justify separate file)
-  - Testing strategy docs (no tests exist yet)
+  - Manual DI via Application casts (low -- fine at current scale)
+  - agents-guide.md (project too small)
+  - 🎯T1: Today page rendering lag (docs/targets.md)
