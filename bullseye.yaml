@@ -1,0 +1,12 @@
+schema_version: 1
+targets:
+  T1:
+    name: "Today page renders instantly on day change and app open"
+    status: identified
+    value: 1.0
+    cost: 1.0
+    acceptance:
+    - "Swiping between days on the Today page shows the correct checklist with no perceptible pause."
+    - "Opening the app on a new day shows today's checklist immediately — never a blank or hung page."
+    context: "Odd pause when flipping between days. Occasionally on a new day the page doesn't render at all until the user swipes away and back. Likely causes (in order): (1) DB query per swipe — completions in TodayViewModel triggers db.completedItems() on every date change; consider pre-fetching adjacent days or caching. (2) Stale-date blank page — _selectedDate race with stateIn subscription. (3) Default-value flash — checklist briefly shows REST checklist before real dayType arrives. (4) refreshDate() is never called on resume — MainActivity.onResume doesn't notify TodayViewModel of date change. Approach: fix (4) first (cheap), then (1) with LRU/prefetch, then audit (2) and (3)."
+    discovered: "2026-04-12"
