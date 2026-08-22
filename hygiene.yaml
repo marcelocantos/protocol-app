@@ -1,0 +1,498 @@
+# hygiene.yaml — declared, drift-validated hygiene posture for protocol-app.
+# Schema reference: the `hygiene` skill (~/.claude/skills/hygiene/SKILL.md).
+# Validate with `/hygiene`; aggregate the fleet with `/hygiene fleet`. Tracks
+# steady-state ("we maintain X"), the complement to bullseye's aspirational
+# targets ("achieve X").
+#
+# Tiers are PER DIMENSION (schema v1): a dimension's held tier is the highest T
+# such that every item in it with tier <= T is satisfied. `floors` is the
+# per-dimension ratchet (below floor => DRIFT); `aspires` is the gap horizon;
+# `enforce` is intent-only and does not affect tiers.
+#
+# Personal Android app: CI is assembleDebug + lintDebug; no test source set;
+# no binary release (Delivery: merged to master). Floors match that reality.
+
+schema_version: 1
+
+repo: protocol-app
+aspires: 3
+floors:            # per-dimension held-tier ratchet; below floor => DRIFT
+  correctness: 0   # no tests; CI does not run testDebugUnitTest
+  security: 1      # keystores/local.properties gitignored; no scanners
+  quality: 1       # lintDebug in CI; no ktlint/detekt
+  deps: 1          # version catalog pins directs; no lockfile / Dependabot
+  release: 0       # no tags, no release workflow; personal APK sideload
+  governance: 2    # Apache-2.0 + README + .gitignore + squash-only
+  build: 1         # Gradle wrapper + JDK 17 + assembleDebug in CI
+  docs: 1          # CLAUDE.md + README (README also under governance)
+  perf: 0          # no benchmark suite
+  vcs: 1           # default branch master; no protection / committed hooks
+  agent: 2         # CLAUDE.md + bullseye.yaml; no AGENTS.md
+
+tiers:
+  1: baseline    # LICENSE + README + .gitignore; tests build & run
+  2: maintained  # matrix, lint/format, release + governance
+  3: hardened    # security scanning, SBOM/signing, fuzzing, perf
+
+items:
+
+  # ============================== CORRECTNESS =============================
+  - id: correctness.unit-tests
+    dim: correctness
+    desc: JVM unit tests (testDebugUnitTest) run in CI with a non-empty source set
+    state: planned
+    cadence: continuous
+    enforce: blocking
+    tier: 1
+    reason: >-
+      app/src has only main/; :app:testDebugUnitTest is NO-SOURCE. CI is
+      assembleDebug + lintDebug. Audit-log 2026-04-08 deferred High; ENT-001.
+    evidence: {absent: {ci_step: {workflow: ci.yml, name: Test}}}
+
+  - id: correctness.instrumented-tests
+    dim: correctness
+    desc: Instrumented / Compose UI tests run on a device or emulator in CI
+    state: planned
+    cadence: continuous
+    enforce: warning
+    tier: 2
+    reason: No app/src/androidTest and no connectedDebugAndroidTest CI job.
+    evidence: {absent: {ci_job: "ci.yml#androidTest"}}
+
+  - id: correctness.journeys
+    dim: correctness
+    desc: Owner-visible device journey covers open app, tick item, see Week gym
+    state: planned
+    cadence: continuous
+    enforce: informational
+    tier: 3
+    reason: No journey workflow or device gate; 🎯T1 is still identified.
+    evidence: {absent: {file: {path: .github/workflows/journey.yml}}}
+
+  - id: correctness.fuzz
+    dim: correctness
+    desc: Fuzz harnesses over parsers or codecs
+    state: skipped
+    cadence: continuous
+    enforce: informational
+    tier: 3
+    reason: Personal Compose/SQLite app; no parser/codec surface worth a fuzz job.
+    evidence: {absent: {ci_job: "ci.yml#fuzz"}}
+
+  # =========================== SECURITY / SUPPLY ==========================
+  - id: security.secrets-gitignored
+    dim: security
+    desc: Keystores, local.properties, and APKs are gitignored
+    state: present
+    cadence: once-must-hold
+    enforce: blocking
+    tier: 1
+    evidence: {file: {path: .gitignore, matches: '[.]jks'}}
+
+  - id: security.secret-scan
+    dim: security
+    desc: GitHub secret scanning is enabled on the public default branch
+    state: planned
+    cadence: once-must-hold
+    enforce: blocking
+    tier: 3
+    reason: security_and_analysis.secret_scanning.status is disabled (public repo).
+    evidence:
+      absent:
+        gh_setting: {key: security_and_analysis.secret_scanning.status, equals: enabled}
+
+  - id: security.push-protection
+    dim: security
+    desc: Secret-scanning push protection is enabled
+    state: planned
+    cadence: once-must-hold
+    enforce: blocking
+    tier: 3
+    reason: secret_scanning_push_protection.status is disabled.
+    evidence:
+      absent:
+        gh_setting:
+          key: security_and_analysis.secret_scanning_push_protection.status
+          equals: enabled
+
+  - id: security.gitleaks
+    dim: security
+    desc: gitleaks (or equivalent) runs in CI
+    state: planned
+    cadence: continuous
+    enforce: warning
+    tier: 3
+    reason: No gitleaks config or CI invocation; GitHub secret scanning is also off.
+    evidence: {absent: {scanner: {tool: gitleaks}}}
+
+  - id: security.dep-vuln-scan
+    dim: security
+    desc: Dependency vulnerability scanning (Dependabot alerts / OWASP / gradle)
+    state: planned
+    cadence: periodic:30d
+    enforce: warning
+    tier: 3
+    reason: Dependabot security updates and vulnerability alerts are disabled.
+    evidence: {absent: {file: {path: .github/dependabot.yml}}}
+
+  - id: security.sast-codeql
+    dim: security
+    desc: CodeQL (or equivalent SAST) for Kotlin/Java
+    state: planned
+    cadence: continuous
+    enforce: informational
+    tier: 3
+    reason: No CodeQL workflow; Android lint is the only static gate.
+    evidence: {absent: {ci_job: "ci.yml#codeql"}}
+
+  - id: security.actions-perms
+    dim: security
+    desc: GitHub Actions default token permissions scoped to least privilege
+    state: planned
+    cadence: once-must-hold
+    enforce: warning
+    tier: 3
+    reason: ci.yml has no top-level permissions block; inherits repo default.
+    evidence:
+      absent: {file: {path: .github/workflows/ci.yml, matches: '(?m)^permissions:'}}
+
+  # ============================== CODE QUALITY ============================
+  - id: quality.lint
+    dim: quality
+    desc: Android lintDebug runs in CI on every push/PR
+    state: enforced
+    cadence: continuous
+    enforce: blocking
+    tier: 1
+    evidence: {ci_step: {workflow: ci.yml, name: Run lint}}
+
+  - id: quality.format
+    dim: quality
+    desc: ktlint (or spotless) format check is a CI gate
+    state: planned
+    cadence: continuous
+    enforce: warning
+    tier: 2
+    reason: kotlin.code.style=official is set; no ktlint/spotless job or config.
+    evidence: {absent: {scanner: {tool: ktlint}}}
+
+  - id: quality.detekt
+    dim: quality
+    desc: detekt static analysis runs in CI
+    state: planned
+    cadence: continuous
+    enforce: informational
+    tier: 3
+    reason: No detekt config or CI invocation; lintDebug is the current static net.
+    evidence: {absent: {scanner: {tool: detekt}}}
+
+  # =========================== DEPENDENCY HEALTH ==========================
+  - id: deps.version-catalog
+    dim: deps
+    desc: Direct dependency versions are pinned in the Gradle version catalog
+    state: present
+    cadence: once-must-hold
+    enforce: warning
+    tier: 1
+    evidence: {file: {path: gradle/libs.versions.toml, matches: '(?m)^agp = "'}}
+
+  - id: deps.lockfile
+    dim: deps
+    desc: Gradle dependency locking (gradle.lockfile) pins the full graph
+    state: planned
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: Version catalog pins directs only; no dependency-locking lockfile.
+    evidence: {absent: {file: {path: gradle.lockfile}}}
+
+  - id: deps.dependabot
+    dim: deps
+    desc: Dependabot (or equivalent) opens PRs for Gradle/Actions advisories
+    state: planned
+    cadence: periodic:7d
+    enforce: informational
+    tier: 3
+    reason: No .github/dependabot.yml; Dependabot security updates disabled.
+    evidence: {absent: {file: {path: .github/dependabot.yml}}}
+
+  # ========================== RELEASE & VERSIONING =======================
+  - id: release.github-release
+    dim: release
+    desc: Tagged GitHub Releases with a signed APK/AAB
+    state: skipped
+    cadence: per-release
+    enforce: informational
+    tier: 3
+    reason: >-
+      Personal-use Android app; Delivery is merged to master. Audit-log
+      2026-04-08 skipped binary distribution on purpose. versionName is 0.1.0;
+      no git tags.
+    evidence: {absent: {file: {path: .github/workflows/release.yml}}}
+
+  - id: release.changelog
+    dim: release
+    desc: A maintained CHANGELOG records user-visible changes per release
+    state: planned
+    cadence: per-release
+    enforce: warning
+    tier: 3
+    reason: History lives in git + docs/audit-log.md; no CHANGELOG.md.
+    evidence: {absent: {file: {path: CHANGELOG.md}}}
+
+  # ============================ GOVERNANCE / META ========================
+  - id: governance.license
+    dim: governance
+    desc: Apache-2.0 LICENSE present
+    state: present
+    cadence: once-must-hold
+    enforce: blocking
+    tier: 1
+    evidence: {file: {path: LICENSE, matches: 'Apache License'}}
+
+  - id: governance.spdx
+    dim: governance
+    desc: Kotlin sources carry SPDX-License-Identifier Apache-2.0 headers
+    state: present
+    cadence: once-must-hold
+    enforce: warning
+    tier: 1
+    evidence:
+      file:
+        path: app/src/main/java/com/marcelo/protocol/ProtocolApp.kt
+        matches: 'SPDX-License-Identifier: Apache-2.0'
+
+  - id: governance.readme
+    dim: governance
+    desc: README present
+    state: present
+    cadence: once-must-hold
+    enforce: blocking
+    tier: 1
+    evidence: {file: {path: README.md}}
+
+  - id: governance.gitignore
+    dim: governance
+    desc: .gitignore covers build artifacts, keystores, local.properties, IDE/OS files
+    state: present
+    cadence: once-must-hold
+    enforce: warning
+    tier: 1
+    evidence: {file: {path: .gitignore}}
+
+  - id: governance.squash-only
+    dim: governance
+    desc: Repo is squash-merge only
+    state: enforced
+    cadence: once-must-hold
+    enforce: blocking
+    tier: 2
+    evidence: {gh_setting: {key: allow_merge_commit, equals: false}}
+
+  - id: governance.delete-branch
+    dim: governance
+    desc: Head branch is deleted on merge
+    state: enforced
+    cadence: once-must-hold
+    enforce: warning
+    tier: 2
+    evidence: {gh_setting: {key: delete_branch_on_merge, equals: true}}
+
+  - id: governance.security-md
+    dim: governance
+    desc: SECURITY.md documents the vulnerability-disclosure process
+    state: planned
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: Public repo without a published disclosure policy yet.
+    evidence: {absent: {file: {path: SECURITY.md}}}
+
+  - id: governance.codeowners
+    dim: governance
+    desc: CODEOWNERS names reviewers for the tree
+    state: planned
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: Sole-owner repo; no CODEOWNERS file. Review is the owner, not a roster.
+    evidence: {absent: {file: {path: CODEOWNERS}}}
+
+  # ================================= BUILD ===============================
+  - id: build.ci-debug
+    dim: build
+    desc: CI builds the debug APK (assembleDebug) on push/PR to master
+    state: enforced
+    cadence: continuous
+    enforce: blocking
+    tier: 1
+    evidence: {ci_step: {workflow: ci.yml, name: Build debug APK}}
+
+  - id: build.gradle-wrapper
+    dim: build
+    desc: Gradle wrapper pins the distribution (8.13)
+    state: present
+    cadence: once-must-hold
+    enforce: warning
+    tier: 1
+    evidence:
+      file: {path: gradle/wrapper/gradle-wrapper.properties, matches: 'gradle-8.13-bin'}
+
+  - id: build.jdk-pin
+    dim: build
+    desc: CI and compileOptions target JDK 17
+    state: present
+    cadence: once-must-hold
+    enforce: warning
+    tier: 1
+    evidence: {file: {path: .github/workflows/ci.yml, matches: 'java-version: 17'}}
+
+  - id: build.proguard
+    dim: build
+    desc: Release minify is on and kotlinx.serialization ProGuard rules exist
+    state: present
+    cadence: once-must-hold
+    enforce: informational
+    tier: 1
+    evidence: {file: {path: app/proguard-rules.pro, matches: 'kotlinx.serialization'}}
+
+  - id: build.release-variant
+    dim: build
+    desc: CI also assembles the release variant (assembleRelease)
+    state: planned
+    cadence: continuous
+    enforce: informational
+    tier: 3
+    reason: CI is debug-only; release minify is local. No binary distribution.
+    evidence: {absent: {ci_step: {workflow: ci.yml, name: Build release APK}}}
+
+  - id: build.makefile
+    dim: build
+    desc: Makefile as a local build front door
+    state: skipped
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: Gradle wrapper (./gradlew) is the front door; no Makefile.
+    evidence: {absent: {file: {path: Makefile}}}
+
+  # ============================ DOCUMENTATION ============================
+  - id: docs.claude-md
+    dim: docs
+    desc: CLAUDE.md documents architecture, build, data layer, and notifications
+    state: present
+    cadence: once-must-hold
+    enforce: warning
+    tier: 1
+    evidence: {file: {path: CLAUDE.md, matches: 'ProtocolDatabase'}}
+
+  - id: docs.audit-log
+    dim: docs
+    desc: docs/audit-log.md records audits and deferred findings
+    state: present
+    cadence: once-must-hold
+    enforce: informational
+    tier: 1
+    evidence: {file: {path: docs/audit-log.md}}
+
+  - id: docs.todo
+    dim: docs
+    desc: docs/TODO.md is not the work ledger (bullseye.yaml is)
+    state: skipped
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: Global convention bans TODO.md; bullseye.yaml is the intent ledger.
+    evidence: {absent: {file: {path: docs/TODO.md}}}
+
+  - id: docs.md-links
+    dim: docs
+    desc: Internal markdown links resolve in CI
+    state: planned
+    cadence: continuous
+    enforce: informational
+    tier: 3
+    reason: No markdown-link check step; CLAUDE.md still names missing docs/targets.md.
+    evidence: {absent: {ci_step: {workflow: ci.yml, name: Check markdown links}}}
+
+  # ============================== PERFORMANCE ===========================
+  - id: perf.benchmarks
+    dim: perf
+    desc: Benchmark suite exists and is runnable
+    state: planned
+    cadence: per-release
+    enforce: informational
+    tier: 3
+    reason: Personal checklist app; no Benchmark/macrobenchmark source set.
+    evidence: {absent: {ci_job: "ci.yml#bench"}}
+
+  # ============================== VCS / HISTORY =========================
+  - id: vcs.default-branch
+    dim: vcs
+    desc: Default branch is master
+    state: enforced
+    cadence: once-must-hold
+    enforce: blocking
+    tier: 1
+    evidence: {gh_setting: {key: default_branch, equals: master}}
+
+  - id: vcs.branch-protection
+    dim: vcs
+    desc: master is protected and requires a green CI check
+    state: planned
+    cadence: once-must-hold
+    enforce: warning
+    tier: 3
+    reason: Branch protection 404; CI runs on push/PR but is not a required check.
+    evidence:
+      absent:
+        command: gh api repos/marcelocantos/protocol-app/branches/master/protection --jq .url
+
+  - id: vcs.pre-commit-hook
+    dim: vcs
+    desc: Committed git hooks (scripts/hooks) gate locally before commit
+    state: planned
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: No scripts/hooks; core.hooksPath is the default .git/hooks.
+    evidence: {absent: {file: {path: scripts/hooks/pre-commit}}}
+
+  - id: vcs.lfs-binaries
+    dim: vcs
+    desc: Large/binary assets tracked via Git LFS
+    state: skipped
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: No large binary assets; APKs and keystores are gitignored.
+    evidence: {absent: {file: {path: .gitattributes}}}
+
+  # =================== AGENT-READINESS / ONBOARDING ====================
+  - id: agent.claude-md
+    dim: agent
+    desc: CLAUDE.md present so agents can discover project conventions
+    state: present
+    cadence: once-must-hold
+    enforce: warning
+    tier: 1
+    evidence: {file: {path: CLAUDE.md}}
+
+  - id: agent.bullseye
+    dim: agent
+    desc: bullseye.yaml present (convergence targets discoverable)
+    state: present
+    cadence: once-must-hold
+    enforce: informational
+    tier: 2
+    evidence: {file: {path: bullseye.yaml}}
+
+  - id: agent.agents-md
+    dim: agent
+    desc: AGENTS.md present as the shared multi-tool instruction file
+    state: planned
+    cadence: once-must-hold
+    enforce: informational
+    tier: 3
+    reason: CLAUDE.md is the only agent instruction file; no AGENTS.md yet.
+    evidence: {absent: {file: {path: AGENTS.md}}}
