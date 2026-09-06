@@ -368,13 +368,17 @@ items:
 
   - id: build.makefile
     dim: build
-    desc: Makefile as a local build front door
+    desc: Tracked Makefile as a local build front door
     state: skipped
     cadence: once-must-hold
     enforce: informational
     tier: 3
-    reason: Gradle wrapper (./gradlew) is the front door; no Makefile.
-    evidence: {absent: {file: {path: Makefile}}}
+    reason: >-
+      Gradle wrapper (./gradlew) is the front door; no Makefile is tracked.
+      An untracked Makefile may sit in the working tree — bullseye_convergence
+      writes one as its standing-invariants hook — so the check asks git whether
+      a Makefile is tracked, not whether a file exists on disk.
+    evidence: {absent: {command: "git ls-files --error-unmatch Makefile"}}
 
   # ============================ DOCUMENTATION ============================
   - id: docs.claude-md
