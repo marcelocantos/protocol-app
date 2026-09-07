@@ -4,6 +4,7 @@
 package com.marcelo.protocol
 
 import android.app.Application
+import com.marcelo.protocol.data.CompletionRepository
 import com.marcelo.protocol.data.PlanningRepository
 import com.marcelo.protocol.data.ProtocolDatabase
 import com.marcelo.protocol.data.ScheduleRepository
@@ -17,6 +18,7 @@ class ProtocolApp : Application() {
     // per-ViewModel copies cannot see each other's writes.
     val scheduleRepo: ScheduleRepository by lazy { ScheduleRepository(db) }
     val planningRepo: PlanningRepository by lazy { PlanningRepository(db) }
+    val completionRepo: CompletionRepository by lazy { CompletionRepository(db) }
 
     override fun onCreate() {
         super.onCreate()

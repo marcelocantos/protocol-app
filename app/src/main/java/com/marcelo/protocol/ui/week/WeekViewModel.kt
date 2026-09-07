@@ -7,7 +7,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.marcelo.protocol.ProtocolApp
-import com.marcelo.protocol.data.ProtocolDatabase
 import com.marcelo.protocol.data.effectiveDayType
 import com.marcelo.protocol.model.DayType
 import com.marcelo.protocol.model.checklistFor
@@ -31,7 +30,7 @@ data class DaySummary(
 class WeekViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as ProtocolApp
-    private val db: ProtocolDatabase = app.db
+    private val completionRepo = app.completionRepo
     private val scheduleRepo = app.scheduleRepo
     private val planningRepo = app.planningRepo
 
@@ -50,15 +49,16 @@ class WeekViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            _gymCount.value = db.gymCountForWeek(LocalDate.now())
+            _gymCount.value = completionRepo.gymCountForWeek(LocalDate.now())
 
             combine(
                 scheduleRepo.schedule,
-                merge(flow { emit(Unit) }, planningRepo.changes),
+                merge(flow { emit(Unit) }, planningRepo.changes, completionRepo.changes),
             ) { sched, _ -> sched }.collect { sched ->
                 val today = LocalDate.now()
+                _gymCount.value = completionRepo.gymCountForWeek(today)
                 val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
-                val allCompletions = db.completedItemsBatch(days)
+                val allCompletions = completionRepo.completedItemsBatch(days)
                 val weekPlans = days
                     .map { planningRepo.weekStartFor(it) }
                     .distinct()

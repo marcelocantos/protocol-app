@@ -20,7 +20,7 @@ import java.time.temporal.TemporalAdjusters
 
 private val RFC3339_MS: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS")
 
-class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.db", null, 2) {
+class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.db", null, 2), CompletionStore {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""
@@ -67,7 +67,7 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
 
     // -- Checklist --
 
-    suspend fun completedItems(date: LocalDate): Map<String, LocalDateTime> = withContext(Dispatchers.IO) {
+    override suspend fun completedItems(date: LocalDate): Map<String, LocalDateTime> = withContext(Dispatchers.IO) {
         val result = mutableMapOf<String, LocalDateTime>()
         readableDatabase.rawQuery(
             "SELECT item_id, completed_at FROM checklist_completions WHERE date = ?",
@@ -80,7 +80,7 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
         result
     }
 
-    suspend fun setCompletion(date: LocalDate, itemId: String, timestamp: LocalDateTime) = withContext(Dispatchers.IO) {
+    override suspend fun setCompletion(date: LocalDate, itemId: String, timestamp: LocalDateTime): Unit = withContext(Dispatchers.IO) {
         writableDatabase.insertWithOnConflict(
             "checklist_completions", null,
             ContentValues().apply {
@@ -92,7 +92,7 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
         )
     }
 
-    suspend fun removeCompletion(date: LocalDate, itemId: String) = withContext(Dispatchers.IO) {
+    override suspend fun removeCompletion(date: LocalDate, itemId: String): Unit = withContext(Dispatchers.IO) {
         writableDatabase.delete(
             "checklist_completions",
             "date = ? AND item_id = ?",
@@ -100,7 +100,7 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
         )
     }
 
-    suspend fun completedItemsBatch(dates: List<LocalDate>): Map<LocalDate, Map<String, LocalDateTime>> = withContext(Dispatchers.IO) {
+    override suspend fun completedItemsBatch(dates: List<LocalDate>): Map<LocalDate, Map<String, LocalDateTime>> = withContext(Dispatchers.IO) {
         if (dates.isEmpty()) return@withContext emptyMap()
         val placeholders = dates.joinToString(",") { "?" }
         val args = dates.map { it.toString() }.toTypedArray()
@@ -118,7 +118,7 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
         result
     }
 
-    suspend fun gymCountForWeek(date: LocalDate): Int = withContext(Dispatchers.IO) {
+    override suspend fun gymCountForWeek(date: LocalDate): Int = withContext(Dispatchers.IO) {
         val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         val sunday = monday.plusDays(6)
         readableDatabase.rawQuery(
