@@ -8,7 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.marcelo.protocol.ProtocolApp
 import com.marcelo.protocol.data.ProtocolDatabase
-import com.marcelo.protocol.data.ScheduleRepository
+import com.marcelo.protocol.data.effectiveDayType
 import com.marcelo.protocol.model.ChecklistItem
 import com.marcelo.protocol.model.DayType
 import com.marcelo.protocol.model.checklistFor
@@ -39,7 +39,8 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as ProtocolApp
     private val db: ProtocolDatabase = app.db
-    private val scheduleRepo = ScheduleRepository(app.db)
+    private val scheduleRepo = app.scheduleRepo
+    private val planningRepo = app.planningRepo
 
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
@@ -58,7 +59,12 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val dayType: StateFlow<DayType> = _selectedDate
-        .flatMapLatest { scheduleRepo.dayTypeFor(it) }
+        .flatMapLatest { date ->
+            combine(
+                scheduleRepo.schedule,
+                planningRepo.weekPlan(planningRepo.weekStartFor(date)),
+            ) { schedule, plans -> effectiveDayType(date, schedule, plans) }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DayType.REST)
 
     private val completions = merge(_selectedDate, _refresh)

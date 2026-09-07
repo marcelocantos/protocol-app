@@ -8,6 +8,7 @@ import com.marcelo.protocol.model.OfficeDayPlan
 import com.marcelo.protocol.model.ParkingStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
@@ -19,6 +20,9 @@ class PlanningRepository(private val db: ProtocolDatabase) {
 
     private val _refresh = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
+    /** Emits after every write, so readers outside this repository can re-query. */
+    val changes: Flow<Unit> = _refresh.asSharedFlow()
+
     fun weekStartFor(date: LocalDate): LocalDate =
         date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
 
@@ -26,6 +30,9 @@ class PlanningRepository(private val db: ProtocolDatabase) {
         merge(flow { emit(Unit) }, _refresh).map {
             db.getWeekPlan(weekStart)
         }
+
+    suspend fun weekPlanNow(weekStart: LocalDate): Map<DayOfWeek, OfficeDayPlan> =
+        db.getWeekPlan(weekStart)
 
     suspend fun updateDay(weekStart: LocalDate, day: DayOfWeek, plan: OfficeDayPlan) {
         db.setWeekPlanDay(weekStart, day, plan)
@@ -37,7 +44,8 @@ class PlanningRepository(private val db: ProtocolDatabase) {
             val weekdays = listOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)
             weekdays.count { day ->
                 val plan = plans[day]
-                val effectiveType = plan?.dayType ?: schedule[day] ?: DayType.REST
+                val date = weekStart.with(TemporalAdjusters.nextOrSame(day))
+                val effectiveType = effectiveDayType(date, schedule, plans)
                 plan?.dayType == null ||
                     (effectiveType == DayType.OFFICE &&
                         plan.parkingStatus != ParkingStatus.BOOKED)

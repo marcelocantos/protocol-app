@@ -7,8 +7,6 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.marcelo.protocol.ProtocolApp
-import com.marcelo.protocol.data.PlanningRepository
-import com.marcelo.protocol.data.ScheduleRepository
 import kotlinx.coroutines.flow.first
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -21,8 +19,8 @@ class PlanningReminderWorker(
 
     override suspend fun doWork(): Result {
         val app = applicationContext as ProtocolApp
-        val planningRepo = PlanningRepository(app.db)
-        val scheduleRepo = ScheduleRepository(app.db)
+        val planningRepo = app.planningRepo
+        val scheduleRepo = app.scheduleRepo
 
         val today = LocalDate.now()
         val nextMonday = today.with(TemporalAdjusters.next(DayOfWeek.MONDAY))

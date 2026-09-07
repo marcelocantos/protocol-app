@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.map
 import java.time.DayOfWeek
-import java.time.LocalDate
 
 class ScheduleRepository(private val db: ProtocolDatabase) {
 
@@ -33,10 +32,6 @@ class ScheduleRepository(private val db: ProtocolDatabase) {
             val stored = db.getSchedule()
             if (stored.isEmpty()) DEFAULT_SCHEDULE else DEFAULT_SCHEDULE + stored
         }
-
-    fun dayTypeFor(date: LocalDate): Flow<DayType> = schedule.map { s ->
-        s[date.dayOfWeek] ?: DayType.REST
-    }
 
     suspend fun setDayType(day: DayOfWeek, type: DayType) {
         db.setScheduleDay(day, type)

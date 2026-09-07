@@ -8,10 +8,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.marcelo.protocol.ProtocolApp
 import com.marcelo.protocol.data.ProtocolDatabase
-import com.marcelo.protocol.data.ScheduleRepository
+import com.marcelo.protocol.data.effectiveDayType
 import com.marcelo.protocol.model.DayType
 import com.marcelo.protocol.model.checklistFor
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -29,7 +32,8 @@ class WeekViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as ProtocolApp
     private val db: ProtocolDatabase = app.db
-    private val scheduleRepo = ScheduleRepository(app.db)
+    private val scheduleRepo = app.scheduleRepo
+    private val planningRepo = app.planningRepo
 
     val schedule: StateFlow<Map<DayOfWeek, DayType>> = scheduleRepo.schedule
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
@@ -48,12 +52,20 @@ class WeekViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _gymCount.value = db.gymCountForWeek(LocalDate.now())
 
-            scheduleRepo.schedule.collect { sched ->
+            combine(
+                scheduleRepo.schedule,
+                merge(flow { emit(Unit) }, planningRepo.changes),
+            ) { sched, _ -> sched }.collect { sched ->
                 val today = LocalDate.now()
                 val days = (6 downTo 0).map { today.minusDays(it.toLong()) }
                 val allCompletions = db.completedItemsBatch(days)
+                val weekPlans = days
+                    .map { planningRepo.weekStartFor(it) }
+                    .distinct()
+                    .associateWith { planningRepo.weekPlanNow(it) }
                 _weekSummary.value = days.map { date ->
-                    val type = sched[date.dayOfWeek] ?: DayType.REST
+                    val plans = weekPlans[planningRepo.weekStartFor(date)] ?: emptyMap()
+                    val type = effectiveDayType(date, sched, plans)
                     val completed = allCompletions[date] ?: emptyMap()
                     val total = checklistFor(type).size
                     val done = checklistFor(type).count { it.id in completed }

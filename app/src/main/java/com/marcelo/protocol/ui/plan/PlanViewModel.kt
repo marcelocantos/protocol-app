@@ -7,8 +7,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.marcelo.protocol.ProtocolApp
-import com.marcelo.protocol.data.PlanningRepository
-import com.marcelo.protocol.data.ScheduleRepository
+import com.marcelo.protocol.data.FALLBACK_DAY_TYPE
+import com.marcelo.protocol.data.effectiveDayType
 import com.marcelo.protocol.model.DayType
 import com.marcelo.protocol.model.OfficeDayPlan
 import com.marcelo.protocol.model.ParkingStatus
@@ -28,8 +28,8 @@ data class PlanDayRow(
     val date: LocalDate,
     val defaultType: DayType,
     val plan: OfficeDayPlan,
+    val effectiveType: DayType,
 ) {
-    val effectiveType: DayType get() = plan.dayType ?: defaultType
     val isDecided: Boolean get() = plan.dayType != null
 }
 
@@ -37,8 +37,8 @@ data class PlanDayRow(
 class PlanViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as ProtocolApp
-    private val scheduleRepo = ScheduleRepository(app.db)
-    private val planningRepo = PlanningRepository(app.db)
+    private val scheduleRepo = app.scheduleRepo
+    private val planningRepo = app.planningRepo
 
     private val _weekStart = MutableStateFlow(planningRepo.weekStartFor(LocalDate.now().plusWeeks(1)))
     val weekStart: StateFlow<LocalDate> = _weekStart
@@ -51,9 +51,9 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
         (0L..4L).map { offset ->
             val date = start.plusDays(offset)
             val day = date.dayOfWeek
-            val defaultType = schedule[day] ?: DayType.REST
+            val defaultType = schedule[day] ?: FALLBACK_DAY_TYPE
             val plan = plans[day] ?: OfficeDayPlan()
-            PlanDayRow(day, date, defaultType, plan)
+            PlanDayRow(day, date, defaultType, plan, effectiveDayType(date, schedule, plans))
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

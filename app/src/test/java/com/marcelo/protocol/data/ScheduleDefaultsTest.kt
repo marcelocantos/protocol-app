@@ -13,7 +13,7 @@ class ScheduleDefaultsTest {
 
     @Test
     fun defaultScheduleCoversEveryWeekday() {
-        // dayTypeFor falls back to REST for any missing day, so a gap here
+        // effectiveDayType falls back to REST for any missing day, so a gap here
         // would silently show a rest checklist on a working day.
         for (day in DayOfWeek.entries) {
             assertNotNull("DEFAULT_SCHEDULE has no entry for $day", ScheduleRepository.DEFAULT_SCHEDULE[day])
