@@ -11,12 +11,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import com.marcelo.protocol.notification.NotificationScheduler
 import com.marcelo.protocol.ui.navigation.AppNavigation
 import com.marcelo.protocol.ui.theme.ProtocolTheme
+import com.marcelo.protocol.ui.today.TodayViewModel
 
 class MainActivity : ComponentActivity() {
+
+    // Held by the activity so onResume can re-sync the selected date; the
+    // same instance the navigation graph hands to TodayScreen.
+    private val todayVm: TodayViewModel by viewModels()
 
     private val notifPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -36,7 +42,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ProtocolTheme {
-                AppNavigation()
+                AppNavigation(todayVm)
             }
         }
     }
@@ -44,5 +50,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         NotificationScheduler.ensureScheduled(this)
+        // The activity is singleTask, so its ViewModel outlives a night in
+        // the background: without this the checklist stays on yesterday.
+        todayVm.refreshDate()
     }
 }

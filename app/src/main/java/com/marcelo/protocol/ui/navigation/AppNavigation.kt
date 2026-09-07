@@ -58,9 +58,8 @@ val TOP_LEVEL_ROUTES = listOf(
 private const val SELECTED_TAB_KEY = "selected_tab"
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(todayVm: TodayViewModel) {
     val navController = rememberNavController()
-    val todayVm: TodayViewModel = viewModel()
     val planVm: PlanViewModel = viewModel()
     val weekVm: WeekViewModel = viewModel()
 
