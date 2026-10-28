@@ -8,7 +8,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.marcelo.protocol.ProtocolApp
 import com.marcelo.protocol.data.ProtocolDatabase
+import com.marcelo.protocol.data.PlanningRepository
 import com.marcelo.protocol.data.ScheduleRepository
+import com.marcelo.protocol.model.ParkingStatus
 import com.marcelo.protocol.model.ChecklistItem
 import com.marcelo.protocol.model.DayType
 import com.marcelo.protocol.model.checklistFor
@@ -40,6 +42,7 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as ProtocolApp
     private val db: ProtocolDatabase = app.db
     private val scheduleRepo = ScheduleRepository(app.db)
+    private val planningRepo = PlanningRepository(app.db)
 
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
@@ -73,6 +76,23 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
             ChecklistRow(item, item.id in completed, completed[item.id])
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * Parking state for the selected day if it's (planned or usually) an
+     * office day and not in the past: true = booked, false = not booked,
+     * null = not relevant.
+     */
+    val parkingBooked: StateFlow<Boolean?> = _selectedDate.flatMapLatest { date ->
+        combine(
+            planningRepo.weekPlan(planningRepo.weekStartFor(date)),
+            scheduleRepo.schedule,
+        ) { plans, schedule ->
+            val plan = plans[date.dayOfWeek]
+            val type = plan?.dayType ?: schedule[date.dayOfWeek]
+            if (type != DayType.OFFICE || date.isBefore(LocalDate.now())) null
+            else plan?.parkingStatus == ParkingStatus.BOOKED
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val gymCount: StateFlow<Int> = merge(_selectedDate, _refresh)
         .map { db.gymCountForWeek(_selectedDate.value) }

@@ -26,8 +26,14 @@ database (`ProtocolDatabase`):
   days. Completions are timestamped. Past days are locked by default
   (unlock via lock icon).
 - **Plan** (`PlanScreen` / `PlanViewModel`) — Week-ahead office day
-  planner. Each weekday gets a day type (Office/WFH/Rest) and parking
-  status (Unplanned/Planned/Booked). Links to Wilson Parking app.
+  planner, organised as confirm week → book parking → confirm. A status
+  card shows the single next step (`PlanStatus`: Decide / Book / AllSet)
+  with one Wilson Parking button. Coming back from Wilson asks which
+  days were booked. Bookings on days that are no longer office days are
+  flagged for cancellation. Parking is effectively two-state (BOOKED or
+  not; legacy PLANNED reads as not booked). Planning notifications
+  deep-link here (`EXTRA_OPEN_TAB`). Today shows parking state on
+  office days.
 - **Week** (`WeekScreen` / `WeekViewModel`) — Default schedule
   configuration (day type per weekday) and 7-day completion summary.
 
