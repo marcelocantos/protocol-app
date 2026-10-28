@@ -18,9 +18,34 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 
+private const val NAG_STATE_DDL = """
+    CREATE TABLE IF NOT EXISTS nag_state (
+        date         TEXT NOT NULL,
+        item_id      TEXT NOT NULL,
+        fire_count   INTEGER NOT NULL DEFAULT 0,
+        snooze_count INTEGER NOT NULL DEFAULT 0,
+        next_fire_at TEXT,
+        resolved     TEXT,
+        PRIMARY KEY (date, item_id)
+    )
+"""
+
+/** Why an item stopped nagging (null = still active). */
+enum class NagResolution { DONE, SKIPPED, GAVE_UP }
+
+data class NagState(
+    val date: LocalDate,
+    val itemId: String,
+    val fireCount: Int = 0,
+    val snoozeCount: Int = 0,
+    /** When the next re-alert is due; null means "at the item's due time". */
+    val nextFireAt: LocalDateTime? = null,
+    val resolved: NagResolution? = null,
+)
+
 private val RFC3339_MS: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS")
 
-class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.db", null, 2) {
+class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""
@@ -52,6 +77,7 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
                 value TEXT NOT NULL
             )
         """)
+        db.execSQL(NAG_STATE_DDL)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -62,6 +88,9 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
                 SET completed_at = date || 'T' || completed_at || ':00.000'
                 WHERE length(completed_at) <= 5
             """)
+        }
+        if (oldVersion < 3) {
+            db.execSQL(NAG_STATE_DDL)
         }
     }
 
@@ -178,6 +207,42 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
                 put("day_of_week", day.name)
                 put("day_type", plan.dayType?.name)
                 put("parking", plan.parkingStatus.name)
+            },
+            SQLiteDatabase.CONFLICT_REPLACE,
+        )
+    }
+
+    // -- Nag state --
+
+    suspend fun getNagState(date: LocalDate, itemId: String): NagState = withContext(Dispatchers.IO) {
+        readableDatabase.rawQuery(
+            "SELECT fire_count, snooze_count, next_fire_at, resolved FROM nag_state WHERE date = ? AND item_id = ?",
+            arrayOf(date.toString(), itemId),
+        ).use { c ->
+            if (c.moveToFirst()) {
+                NagState(
+                    date, itemId,
+                    fireCount = c.getInt(0),
+                    snoozeCount = c.getInt(1),
+                    nextFireAt = c.getString(2)?.let { LocalDateTime.parse(it, RFC3339_MS) },
+                    resolved = c.getString(3)?.let { NagResolution.valueOf(it) },
+                )
+            } else {
+                NagState(date, itemId)
+            }
+        }
+    }
+
+    suspend fun putNagState(state: NagState) = withContext(Dispatchers.IO) {
+        writableDatabase.insertWithOnConflict(
+            "nag_state", null,
+            ContentValues().apply {
+                put("date", state.date.toString())
+                put("item_id", state.itemId)
+                put("fire_count", state.fireCount)
+                put("snooze_count", state.snoozeCount)
+                put("next_fire_at", state.nextFireAt?.format(RFC3339_MS))
+                put("resolved", state.resolved?.name)
             },
             SQLiteDatabase.CONFLICT_REPLACE,
         )

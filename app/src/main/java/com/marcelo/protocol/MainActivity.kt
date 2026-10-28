@@ -12,7 +12,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.marcelo.protocol.nag.NagEngine
 import com.marcelo.protocol.notification.NotificationScheduler
+import kotlinx.coroutines.launch
 import com.marcelo.protocol.ui.navigation.AppNavigation
 import com.marcelo.protocol.ui.theme.ProtocolTheme
 
@@ -44,5 +47,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         NotificationScheduler.ensureScheduled(this)
+        lifecycleScope.launch { NagEngine.rescheduleAll(applicationContext) }
     }
 }

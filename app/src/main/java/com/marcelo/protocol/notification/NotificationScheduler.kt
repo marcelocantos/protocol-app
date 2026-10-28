@@ -31,20 +31,10 @@ object NotificationScheduler {
                 .setInitialDelay(delayUntil(LocalTime.of(9, 0)))
                 .build(),
         )
-        wm.enqueueUniqueWork(
-            WORK_WIND_DOWN,
-            ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<WindDownWorker>()
-                .setInitialDelay(delayUntil(LocalTime.of(22, 0)))
-                .build(),
-        )
-        wm.enqueueUniqueWork(
-            WORK_BEDTIME,
-            ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<BedtimeWorker>()
-                .setInitialDelay(delayUntil(LocalTime.of(23, 0)))
-                .build(),
-        )
+
+        // Wind-down and bedtime are now nagging checklist items (see NagEngine).
+        wm.cancelUniqueWork(WORK_WIND_DOWN)
+        wm.cancelUniqueWork(WORK_BEDTIME)
 
         schedulePlanningReminders(context, ExistingWorkPolicy.KEEP)
     }
@@ -57,20 +47,6 @@ object NotificationScheduler {
             ExistingWorkPolicy.REPLACE,
             OneTimeWorkRequestBuilder<MovementBreakWorker>()
                 .setInitialDelay(delayUntil(LocalTime.of(9, 0)))
-                .build(),
-        )
-        wm.enqueueUniqueWork(
-            WORK_WIND_DOWN,
-            ExistingWorkPolicy.REPLACE,
-            OneTimeWorkRequestBuilder<WindDownWorker>()
-                .setInitialDelay(delayUntil(LocalTime.of(22, 0)))
-                .build(),
-        )
-        wm.enqueueUniqueWork(
-            WORK_BEDTIME,
-            ExistingWorkPolicy.REPLACE,
-            OneTimeWorkRequestBuilder<BedtimeWorker>()
-                .setInitialDelay(delayUntil(LocalTime.of(23, 0)))
                 .build(),
         )
     }
