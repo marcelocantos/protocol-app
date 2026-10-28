@@ -58,7 +58,7 @@ val TOP_LEVEL_ROUTES = listOf(
 private const val SELECTED_TAB_KEY = "selected_tab"
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(requestedTab: String? = null, onTabRequestHandled: () -> Unit = {}) {
     val navController = rememberNavController()
     val todayVm: TodayViewModel = viewModel()
     val planVm: PlanViewModel = viewModel()
@@ -68,8 +68,21 @@ fun AppNavigation() {
     val scope = rememberCoroutineScope()
     var savedIndex by remember { mutableIntStateOf(0) }
 
-    // Load saved tab on launch.
+    // A notification asked for a specific tab: go straight there.
+    LaunchedEffect(requestedTab) {
+        if (requestedTab == "plan") {
+            planVm.showNextWeek()
+            navController.navigate(PlanRoute) {
+                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                launchSingleTop = true
+            }
+            onTabRequestHandled()
+        }
+    }
+
+    // Load saved tab on launch (unless a notification picked one).
     LaunchedEffect(Unit) {
+        if (requestedTab != null) return@LaunchedEffect
         val stored = app.db.getSetting(SELECTED_TAB_KEY)?.toIntOrNull() ?: 0
         savedIndex = stored
         if (stored != 0) {

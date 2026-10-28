@@ -44,9 +44,13 @@ object NotificationHelper {
         )
     }
 
-    fun notify(context: Context, channelId: String, title: String, body: String, notifId: Int) {
+    /** Intent extra naming the tab to open ("plan"); see MainActivity. */
+    const val EXTRA_OPEN_TAB = "open_tab"
+
+    fun notify(context: Context, channelId: String, title: String, body: String, notifId: Int, openTab: String? = null) {
         val launchIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            openTab?.let { putExtra(EXTRA_OPEN_TAB, it) }
         }
         val pendingIntent = PendingIntent.getActivity(
             context, notifId, launchIntent,

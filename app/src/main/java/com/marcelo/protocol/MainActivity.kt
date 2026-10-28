@@ -4,6 +4,9 @@
 package com.marcelo.protocol
 
 import android.Manifest
+import android.content.Intent
+import androidx.compose.runtime.mutableStateOf
+import com.marcelo.protocol.notification.NotificationHelper
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -34,11 +37,24 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        requestedTab.value = intent.getStringExtra(NotificationHelper.EXTRA_OPEN_TAB)
+
         setContent {
             ProtocolTheme {
-                AppNavigation()
+                AppNavigation(
+                    requestedTab = requestedTab.value,
+                    onTabRequestHandled = { requestedTab.value = null },
+                )
             }
         }
+    }
+
+    /** Tab requested by a notification tap (e.g. "plan"), consumed by AppNavigation. */
+    private val requestedTab = mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra(NotificationHelper.EXTRA_OPEN_TAB)?.let { requestedTab.value = it }
     }
 
     override fun onResume() {

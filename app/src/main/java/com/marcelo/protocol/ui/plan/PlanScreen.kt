@@ -3,190 +3,287 @@
 
 package com.marcelo.protocol.ui.plan
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.marcelo.protocol.model.DayType
-import com.marcelo.protocol.model.ParkingStatus
+import java.time.DayOfWeek
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-private data class TypeOption(val type: DayType?, val label: String, val emoji: String)
+private const val WILSON_PACKAGE = "au.com.wilsonone"
 
-private val TYPE_OPTIONS = listOf(
-    TypeOption(null, "", "\u2753"),
-    TypeOption(DayType.OFFICE, DayType.OFFICE.label, DayType.OFFICE.emoji),
-    TypeOption(DayType.WFH, DayType.WFH.label, DayType.WFH.emoji),
-    TypeOption(DayType.REST, DayType.REST.label, DayType.REST.emoji),
-)
+fun openWilson(context: Context) {
+    val intent = context.packageManager.getLaunchIntentForPackage(WILSON_PACKAGE)
+        ?: Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$WILSON_PACKAGE"))
+    context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
+private fun DayOfWeek.short() = getDisplayName(TextStyle.SHORT, Locale.getDefault())
+private fun List<PlanDayRow>.dayList() = joinToString(", ") { it.day.short() }
 
 @Composable
 fun PlanScreen(vm: PlanViewModel) {
     val weekStart by vm.weekStart.collectAsStateWithLifecycle()
     val days by vm.days.collectAsStateWithLifecycle()
+    val status by vm.status.collectAsStateWithLifecycle()
+    val awaiting by vm.awaitingWilsonReturn.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var showReturnPrompt by remember { mutableStateOf(false) }
+
+    // Coming back from Wilson: ask what got booked instead of making the
+    // user find and tap each day.
+    LifecycleResumeEffect(awaiting) {
+        if (awaiting) showReturnPrompt = true
+        onPauseOrDispose {}
+    }
+
+    val bookWilson = {
+        vm.wilsonLaunched()
+        openWilson(context)
+    }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
             Spacer(Modifier.height(16.dp))
-            Text("Plan Office Days", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Week of ${weekStart.format(DateTimeFormatter.ofPattern("d MMM"))}",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+            Text("Office week", style = MaterialTheme.typography.titleLarge)
+            WeekSwitcher(
+                label = when (vm.weekOffset()) {
+                    0L -> "This week"
+                    1L -> "Next week"
+                    else -> "In ${vm.weekOffset()} weeks"
+                } + " · " + weekStart.format(DateTimeFormatter.ofPattern("d")) + "–" +
+                    weekStart.plusDays(4).format(DateTimeFormatter.ofPattern("d MMM")),
+                canGoBack = vm.weekOffset() > 0,
+                onBack = { vm.shiftWeek(-1) },
+                onForward = { vm.shiftWeek(1) },
             )
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { vm.viewThisWeek() }) { Text("This Week") }
-                Button(onClick = { vm.viewNextWeek() }) { Text("Next Week") }
+        }
+
+        status?.let { s -> item { StatusCard(s, onConfirmUsual = vm::confirmUsual, onBook = bookWilson, onAlreadyBooked = { showReturnPrompt = true }) } }
+
+        items(days.filter { it.staleBooking }, key = { "stale-${it.day}" }) { row ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        "\u26A0\uFE0F ${row.day.short()} is booked but now ${row.plan.dayType?.label ?: "undecided"}. Cancel it in Wilson?",
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { openWilson(context) }) { Text("Open Wilson") }
+                        TextButton(onClick = { vm.setBooked(row.day, false) }) { Text("I've cancelled it") }
+                    }
+                }
             }
-            Spacer(Modifier.height(12.dp))
         }
 
         items(days, key = { it.day }) { row ->
-            PlanDayCard(
+            DayRow(
                 row = row,
                 onSetType = { vm.setPlannedType(row.day, it) },
-                onSetParking = { vm.setParkingStatus(row.day, it) },
-                onOpenWilson = {
-                    val wilsonPackage = "au.com.wilsonone"
-                    val intent = context.packageManager
-                        .getLaunchIntentForPackage(wilsonPackage)
-                    if (intent != null) {
-                        context.startActivity(intent)
-                    } else {
-                        context.startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("https://play.google.com/store/apps/details?id=$wilsonPackage"),
-                            )
-                        )
-                    }
-                },
+                onToggleBooked = { vm.setBooked(row.day, !row.isBooked) },
             )
         }
 
         item { Spacer(Modifier.height(80.dp)) }
     }
+
+    if (showReturnPrompt) {
+        val candidates = days.filter { it.needsBooking }
+        if (candidates.isEmpty()) {
+            showReturnPrompt = false
+            vm.dismissReturnPrompt()
+        } else {
+            ReturnFromWilsonDialog(
+                candidates = candidates,
+                onConfirm = { vm.markBooked(it); showReturnPrompt = false },
+                onDismiss = { vm.dismissReturnPrompt(); showReturnPrompt = false },
+            )
+        }
+    }
 }
 
 @Composable
-private fun PlanDayCard(
-    row: PlanDayRow,
-    onSetType: (DayType?) -> Unit,
-    onSetParking: (ParkingStatus) -> Unit,
-    onOpenWilson: () -> Unit,
-) {
-    val isOffice = row.effectiveType == DayType.OFFICE
-    val bg = when {
-        !row.isDecided -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-        isOffice -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+private fun WeekSwitcher(label: String, canGoBack: Boolean, onBack: () -> Unit, onForward: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onBack, enabled = canGoBack) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous week")
+        }
+        Text(label, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        IconButton(onClick = onForward) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Following week")
+        }
     }
+}
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = bg),
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-            // Day label + type selector on one line
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "${row.date.dayOfMonth} ${row.day.getDisplayName(TextStyle.SHORT, Locale.getDefault())}",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(52.dp),
-                )
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
-                    TYPE_OPTIONS.forEachIndexed { index, opt ->
-                        val weight = if (opt.type == null) 0.5f else 1f
-                        SegmentedButton(
-                            selected = row.plan.dayType == opt.type,
-                            onClick = { onSetType(opt.type) },
-                            shape = SegmentedButtonDefaults.itemShape(index, TYPE_OPTIONS.size),
-                            icon = {},
-                            modifier = Modifier.weight(weight),
-                        ) {
-                            Text(
-                                text = if (opt.label.isEmpty()) opt.emoji else "${opt.emoji} ${opt.label}",
-                                maxLines = 1,
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
+@Composable
+private fun StatusCard(
+    status: PlanStatus,
+    onConfirmUsual: () -> Unit,
+    onBook: () -> Unit,
+    onAlreadyBooked: () -> Unit,
+) {
+    val (bg, fg) = when (status) {
+        is PlanStatus.AllSet -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+    }
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = bg, contentColor = fg)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            when (status) {
+                is PlanStatus.Decide -> {
+                    Text("Step 1 · Confirm the week", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        "${status.days.size} day${if (status.days.size > 1) "s" else ""} undecided",
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "Usual: " + status.days.joinToString(" · ") { "${it.day.short()} ${it.defaultType.emoji} ${it.defaultType.label}" },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(onClick = onConfirmUsual, modifier = Modifier.fillMaxWidth()) { Text("Use my usual week") }
+                    Text("…or change days below.", style = MaterialTheme.typography.bodySmall)
+                }
+                is PlanStatus.Book -> {
+                    Text("Step 2 · Book parking", style = MaterialTheme.typography.labelLarge)
+                    Text(
+                        "\uD83C\uDD7F\uFE0F Needed: ${status.days.dayList()}",
+                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    )
+                    Button(onClick = onBook, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                        Text("\uD83D\uDE97 Book in Wilson")
+                    }
+                    OutlinedButton(onClick = onAlreadyBooked, modifier = Modifier.fillMaxWidth()) {
+                        Text("Already booked")
                     }
                 }
-            }
-
-            // Parking section (only when decided as Office)
-            if (row.isDecided && isOffice) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "\uD83C\uDD7F\uFE0F Parking",
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    ParkingStatus.entries.forEach { status ->
-                        FilterChip(
-                            selected = row.plan.parkingStatus == status,
-                            onClick = { onSetParking(status) },
-                            label = { Text("${status.emoji} ${status.label}") },
-                        )
-                    }
-                }
-                if (row.plan.parkingStatus != ParkingStatus.BOOKED) {
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = onOpenWilson,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.tertiary,
-                        ),
-                    ) {
-                        Text("\uD83D\uDE97 Open Wilson Parking")
-                    }
+                is PlanStatus.AllSet -> {
+                    Text("\u2705 All set", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (status.booked.isEmpty()) "No office days this week."
+                        else "Parking booked: ${status.booked.dayList()}",
+                    )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun DayRow(row: PlanDayRow, onSetType: (DayType) -> Unit, onToggleBooked: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (row.effectiveType == DayType.OFFICE && row.isDecided)
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        ),
+    ) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${row.day.short()} ${row.date.dayOfMonth}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(56.dp),
+                )
+                if (!row.isDecided) {
+                    Text(
+                        "usual: ${row.defaultType.emoji} ${row.defaultType.label}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                if (row.plan.dayType == DayType.OFFICE) {
+                    FilterChip(
+                        selected = row.isBooked,
+                        onClick = onToggleBooked,
+                        label = { Text(if (row.isBooked) "\uD83C\uDD7F\uFE0F Booked" else "\uD83C\uDD7F\uFE0F Not booked") },
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                DayType.entries.forEach { type ->
+                    FilterChip(
+                        selected = row.plan.dayType == type,
+                        onClick = { onSetType(type) },
+                        label = { Text("${type.emoji} ${type.label}") },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReturnFromWilsonDialog(
+    candidates: List<PlanDayRow>,
+    onConfirm: (List<DayOfWeek>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val checked = remember(candidates) { mutableStateListOf(*candidates.map { it.day }.toTypedArray()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Did you book parking?") },
+        text = {
+            Column {
+                candidates.forEach { row ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = row.day in checked,
+                            onCheckedChange = { if (it) checked += row.day else checked -= row.day },
+                        )
+                        Text("${row.day.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${row.date.dayOfMonth}")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(checked.toList()) }, enabled = checked.isNotEmpty()) { Text("Mark booked") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Not yet") } },
+    )
 }

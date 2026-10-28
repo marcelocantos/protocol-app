@@ -4,6 +4,8 @@
 package com.marcelo.protocol.ui.today
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.ui.platform.LocalContext
+import com.marcelo.protocol.ui.plan.openWilson
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -108,6 +110,8 @@ private fun DayPage(
     val checklist by vm.checklist.collectAsStateWithLifecycle()
     val gymCount by vm.gymCount.collectAsStateWithLifecycle()
     val selectedDate by vm.selectedDate.collectAsStateWithLifecycle()
+    val parkingBooked by vm.parkingBooked.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     val isActivePage = date == selectedDate
 
@@ -160,6 +164,31 @@ private fun DayPage(
                 }
             }
             Spacer(Modifier.height(12.dp))
+        }
+
+        if (isActivePage && parkingBooked != null) {
+            item {
+                if (parkingBooked == true) {
+                    Text(
+                        "\uD83C\uDD7F\uFE0F Parking booked",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                } else {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                        onClick = { openWilson(context) },
+                    ) {
+                        Text(
+                            "\uD83C\uDD7F\uFE0F Office day, parking not booked. Tap to open Wilson.",
+                            modifier = Modifier.padding(12.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
         }
 
         if (isActivePage) {
