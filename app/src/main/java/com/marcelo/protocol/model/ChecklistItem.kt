@@ -9,4 +9,6 @@ data class ChecklistItem(
     val id: String,
     val label: String,
     val timeHint: String,
+    /** Optional secondary line, e.g. a heart-rate target. */
+    val detail: String? = null,
 )

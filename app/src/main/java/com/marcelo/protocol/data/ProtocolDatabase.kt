@@ -9,7 +9,10 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.marcelo.protocol.model.DayType
 import com.marcelo.protocol.model.OfficeDayPlan
+import com.marcelo.protocol.model.DEFAULT_ROUTINE
 import com.marcelo.protocol.model.ParkingStatus
+import com.marcelo.protocol.model.ROUTINE_JSON
+import com.marcelo.protocol.model.RoutineItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
@@ -20,7 +23,7 @@ import java.time.temporal.TemporalAdjusters
 
 private val RFC3339_MS: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS")
 
-class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.db", null, 2) {
+class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""
@@ -52,6 +55,27 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
                 value TEXT NOT NULL
             )
         """)
+        createRoutine(db)
+    }
+
+    /** v3: data-driven routine items (exercise etc.), seeded from DEFAULT_ROUTINE. */
+    private fun createRoutine(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS routine_items (
+                id       TEXT NOT NULL PRIMARY KEY,
+                position INTEGER NOT NULL,
+                json     TEXT NOT NULL
+            )
+        """)
+        DEFAULT_ROUTINE.forEachIndexed { i, item ->
+            db.insertWithOnConflict("routine_items", null, routineValues(i, item), SQLiteDatabase.CONFLICT_IGNORE)
+        }
+    }
+
+    private fun routineValues(position: Int, item: RoutineItem) = ContentValues().apply {
+        put("id", item.id)
+        put("position", position)
+        put("json", ROUTINE_JSON.encodeToString(RoutineItem.serializer(), item))
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -63,6 +87,7 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
                 WHERE length(completed_at) <= 5
             """)
         }
+        if (oldVersion < 3) createRoutine(db)
     }
 
     // -- Checklist --
@@ -127,6 +152,37 @@ class ProtocolDatabase(context: Context) : SQLiteOpenHelper(context, "protocol.d
         ).use { cursor ->
             if (cursor.moveToFirst()) cursor.getInt(0) else 0
         }
+    }
+
+    /** Completions of [itemId] in the Mon–Sun week containing [date]. */
+    suspend fun countForWeek(itemId: String, date: LocalDate): Int = withContext(Dispatchers.IO) {
+        val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM checklist_completions WHERE item_id = ? AND date BETWEEN ? AND ?",
+            arrayOf(itemId, monday.toString(), monday.plusDays(6).toString()),
+        ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+    }
+
+    // -- Routine --
+
+    suspend fun getRoutine(): List<RoutineItem> = withContext(Dispatchers.IO) {
+        val out = mutableListOf<RoutineItem>()
+        readableDatabase.rawQuery("SELECT json FROM routine_items ORDER BY position", null).use { c ->
+            while (c.moveToNext()) {
+                // Skip rows that no longer parse rather than crash the app.
+                runCatching { ROUTINE_JSON.decodeFromString(RoutineItem.serializer(), c.getString(0)) }
+                    .onSuccess { out += it }
+            }
+        }
+        out
+    }
+
+    suspend fun updateRoutineItem(item: RoutineItem) = withContext(Dispatchers.IO) {
+        writableDatabase.update(
+            "routine_items",
+            ContentValues().apply { put("json", ROUTINE_JSON.encodeToString(RoutineItem.serializer(), item)) },
+            "id = ?", arrayOf(item.id),
+        )
     }
 
     // -- Schedule --
