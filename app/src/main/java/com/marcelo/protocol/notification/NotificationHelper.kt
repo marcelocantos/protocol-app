@@ -15,26 +15,17 @@ import com.marcelo.protocol.MainActivity
 object NotificationHelper {
 
     const val CHANNEL_MOVEMENT = "movement_break"
-    const val CHANNEL_WIND_DOWN = "wind_down"
-    const val CHANNEL_BEDTIME = "bedtime"
     const val CHANNEL_PLANNING = "planning"
 
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
+        // Superseded by NagEngine channels.
+        nm.deleteNotificationChannel("wind_down")
+        nm.deleteNotificationChannel("bedtime")
 
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_MOVEMENT, "Movement Breaks", NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "90-minute movement reminders during work hours"
-            }
-        )
-        nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_WIND_DOWN, "Wind Down", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "10pm screen-off reminder"
-            }
-        )
-        nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_BEDTIME, "Bedtime", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "11pm bedtime reminder"
             }
         )
         nm.createNotificationChannel(

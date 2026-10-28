@@ -3,7 +3,10 @@
 
 package com.marcelo.protocol.ui.today
 
+import android.content.Intent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -70,6 +73,11 @@ fun TodayScreen(vm: TodayViewModel) {
     val editable by vm.editable.collectAsStateWithLifecycle()
     val unlocked by vm.unlocked.collectAsStateWithLifecycle()
 
+    LifecycleResumeEffect(Unit) {
+        vm.refreshCapabilities()
+        onPauseOrDispose {}
+    }
+
     val pagerState = rememberPagerState(
         initialPage = PAGE_OFFSET,
         pageCount = { TOTAL_PAGES },
@@ -108,6 +116,8 @@ private fun DayPage(
     val checklist by vm.checklist.collectAsStateWithLifecycle()
     val gymCount by vm.gymCount.collectAsStateWithLifecycle()
     val selectedDate by vm.selectedDate.collectAsStateWithLifecycle()
+    val missing by vm.missingCapabilities.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     val isActivePage = date == selectedDate
 
@@ -162,6 +172,34 @@ private fun DayPage(
             Spacer(Modifier.height(12.dp))
         }
 
+        if (isActivePage && isToday) {
+            items(missing, key = { it.label }) { cap ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    onClick = { context.startActivity(cap.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
+                ) {
+                    Text(
+                        "\u26A0\uFE0F ${cap.label}. Tap to fix.",
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            }
+            val overdue = checklist.count { it.overdueMinutes != null }
+            if (overdue > 0) {
+                item {
+                    Text(
+                        "\u23F0 $overdue overdue",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(vertical = 4.dp),
+                    )
+                }
+            }
+        }
+
         if (isActivePage) {
             // Progress
             item {
@@ -214,6 +252,8 @@ private fun ChecklistCard(
     val bg by animateColorAsState(
         targetValue = if (row.checked)
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        else if (row.overdueMinutes != null)
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
         else
             MaterialTheme.colorScheme.surface,
         label = "cardBg",
@@ -248,6 +288,13 @@ private fun ChecklistCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                row.overdueMinutes?.let { m ->
+                    Text(
+                        text = if (m < 60) "overdue ${m}m" else "overdue ${m / 60}h ${m % 60}m",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 if (row.completedAt != null) {
                     val isLegacy = row.completedAt.toLocalDate() < TIMESTAMP_CUTOFF
                         && row.completedAt.toLocalTime() == LocalTime.MIDNIGHT

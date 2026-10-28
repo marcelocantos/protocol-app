@@ -5,6 +5,7 @@ package com.marcelo.protocol
 
 import android.app.Application
 import com.marcelo.protocol.data.ProtocolDatabase
+import com.marcelo.protocol.nag.NagEngine
 import com.marcelo.protocol.notification.NotificationHelper
 
 class ProtocolApp : Application() {
@@ -14,5 +15,6 @@ class ProtocolApp : Application() {
     override fun onCreate() {
         super.onCreate()
         NotificationHelper.createChannels(this)
+        NagEngine.createChannels(this)
     }
 }

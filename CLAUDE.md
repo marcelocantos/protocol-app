@@ -43,19 +43,28 @@ database (`ProtocolDatabase`):
 
 ### Notifications
 
-Four `WorkManager` channels, each using `OneTimeWorkRequest` with
-manual re-enqueue (not `PeriodicWork`):
+Two mechanisms:
+
+**Nagging reminders** (`nag/`): checklist items carry a `NagLevel`
+(`NONE`/`NAG`/`ALARM`). `NagEngine` schedules exact `AlarmManager` alarms
+at each item's due time (`setAlarmClock` for `ALARM`, Doze-exempt) and
+posts ongoing notifications with Done / Snooze / Skip actions. Re-alerts
+escalate per `NagPolicy` (5, 10, 15, then every 30 min) until done,
+skipped, or 3 h past due. Snoozes are capped at 3. Swiping the
+notification re-posts it. `ALARM` items also get a full-screen
+`NagAlarmActivity`. State is in `nag_state`; `rescheduleAll()` rebuilds
+alarms on app resume, boot, clock change, permission grant and midnight.
+Today shows overdue items and a banner for missing permissions.
+
+**Fire-and-forget** (`notification/`): `WorkManager` one-time requests
+with manual re-enqueue:
 
 | Channel | Schedule | Purpose |
 |---------|----------|---------|
 | `movement_break` | Every 90 min, 9am–5pm | Stand up and move |
-| `wind_down` | 10pm daily | Screens off |
-| `bedtime` | 11pm daily | Get to bed |
 | `planning` | Sat 10am, Sat 5pm, Sun 10am | Book office parking |
 
 `BootReceiver` re-schedules on device reboot.
-`MovementBreakWorker` chains follow-up work requests for the 90-min
-interval.
 
 ## Database
 
