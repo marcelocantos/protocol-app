@@ -18,6 +18,7 @@ object NotificationHelper {
     const val CHANNEL_WIND_DOWN = "wind_down"
     const val CHANNEL_BEDTIME = "bedtime"
     const val CHANNEL_PLANNING = "planning"
+    const val CHANNEL_ROUTINE = "routine"
 
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -40,6 +41,11 @@ object NotificationHelper {
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_PLANNING, "Office Planning", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Weekend reminders to plan and book parking for office days"
+            }
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_ROUTINE, "Routine", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Exercise and weigh-in reminders"
             }
         )
     }

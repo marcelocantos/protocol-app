@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.marcelo.protocol.model.DayType
+import com.marcelo.protocol.model.RoutineSchedule
 import com.marcelo.protocol.model.GYM_WEEKLY_TARGET
 import java.time.DayOfWeek
 import java.time.format.TextStyle
@@ -38,6 +39,7 @@ fun WeekScreen(vm: WeekViewModel) {
     val schedule by vm.schedule.collectAsStateWithLifecycle()
     val gymCount by vm.gymCount.collectAsStateWithLifecycle()
     val weekSummary by vm.weekSummary.collectAsStateWithLifecycle()
+    val routine by vm.routine.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = Modifier
@@ -71,6 +73,41 @@ fun WeekScreen(vm: WeekViewModel) {
                             onClick = { vm.setDayType(day, type) },
                             label = { Text("${type.emoji} ${type.label}") },
                         )
+                    }
+                }
+            }
+        }
+
+        // Routine (data-driven exercise etc.)
+        item {
+            Spacer(Modifier.height(16.dp))
+            Text("Routine", style = MaterialTheme.typography.titleMedium)
+        }
+        items(routine, key = { it.id }) { item ->
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(item.label, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        item.describe() + (item.detail?.let { " · $it" } ?: ""),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val s = item.schedule
+                    if (s is RoutineSchedule.PerWeek) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (s.days.isEmpty()) "Pick days (optional, any ${s.times} days count):" else "Days:",
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            DayOfWeek.entries.forEach { d ->
+                                FilterChip(
+                                    selected = d.name in s.days,
+                                    onClick = { vm.toggleRoutineDay(item, d) },
+                                    label = { Text(d.getDisplayName(TextStyle.NARROW, Locale.getDefault())) },
+                                )
+                            }
+                        }
                     }
                 }
             }

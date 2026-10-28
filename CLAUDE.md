@@ -41,6 +41,18 @@ database (`ProtocolDatabase`):
 - No DI framework. ViewModels cast `application as ProtocolApp` to
   access the shared `db` instance.
 
+### Routine (data-driven items)
+
+`routine_items` (DB v3) holds JSON-encoded `RoutineItem`s (`model/Routine.kt`),
+seeded once from `DEFAULT_ROUTINE`. Schedule kinds: `daily`, `weekly`
+(days + time), `window` (days + start–end), and `per_week` (N per Mon–Sun
+week, optional days). `RoutineRepository.checklistFor()` merges them into
+Today's checklist with ids `routine:<id>`. The Week screen lists them and
+lets you choose days for `per_week` items. `RoutineReminders` derives
+reminder moments (a window fires at its start and 1 h before its end;
+undecided-days `per_week` fires only when behind pace) and runs one
+self-rescheduling WorkManager job.
+
 ### Notifications
 
 Four `WorkManager` channels, each using `OneTimeWorkRequest` with

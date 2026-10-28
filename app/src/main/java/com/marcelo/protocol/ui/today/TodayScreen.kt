@@ -241,6 +241,9 @@ private fun ChecklistCard(
                     style = MaterialTheme.typography.bodyLarge,
                     textDecoration = if (row.checked) TextDecoration.LineThrough else null,
                 )
+                row.item.detail?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(

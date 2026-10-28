@@ -8,10 +8,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.marcelo.protocol.ProtocolApp
 import com.marcelo.protocol.data.ProtocolDatabase
+import com.marcelo.protocol.data.RoutineRepository
 import com.marcelo.protocol.data.ScheduleRepository
 import com.marcelo.protocol.model.ChecklistItem
 import com.marcelo.protocol.model.DayType
 import com.marcelo.protocol.model.checklistFor
+import com.marcelo.protocol.notification.RoutineReminders
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +42,7 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as ProtocolApp
     private val db: ProtocolDatabase = app.db
     private val scheduleRepo = ScheduleRepository(app.db)
+    private val routineRepo = RoutineRepository(app.db)
 
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
@@ -68,10 +71,14 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
     val checklist: StateFlow<List<ChecklistRow>> = combine(
         dayType,
         completions,
-    ) { type, completed ->
-        checklistFor(type).map { item ->
-            ChecklistRow(item, item.id in completed, completed[item.id])
-        }
+        routineRepo.items,
+    ) { type, completed, routine ->
+        val date = _selectedDate.value
+        val starts = routine.associate { it.checklistId to it.startTime }
+        val routineItems = routineRepo.checklistFor(date, completed.keys)
+        (checklistFor(type) + routineItems)
+            .sortedBy { starts[it.id] ?: runCatching { LocalTime.parse(it.timeHint) }.getOrDefault(LocalTime.MAX) }
+            .map { item -> ChecklistRow(item, item.id in completed, completed[item.id]) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val gymCount: StateFlow<Int> = merge(_selectedDate, _refresh)
@@ -102,6 +109,7 @@ class TodayViewModel(application: Application) : AndroidViewModel(application) {
                 db.setCompletion(date, itemId, LocalDateTime.now())
             }
             _refresh.emit(Unit)
+            RoutineReminders.schedule(app)
         }
     }
 
